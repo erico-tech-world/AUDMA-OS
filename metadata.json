@@ -1,0 +1,10 @@
+{
+  "name": "AUDMA OS",
+  "description": "Enterprise Operating System combining Modular HRM and Double-Entry Financial Accounting with Pluggable Provider Architecture.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
