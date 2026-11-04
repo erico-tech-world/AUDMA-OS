@@ -32,7 +32,6 @@ interface TopBarProps {
   onNavigate: (tab: string, subTab?: string) => void;
   onOpenCommandPalette: () => void;
   onToggleSidebar?: () => void;
-  onLogin?: () => void;
   onLogout?: () => void;
   isAuthenticated?: boolean;
 }
@@ -44,7 +43,6 @@ export const TopBar: React.FC<TopBarProps> = ({
   onNavigate,
   onOpenCommandPalette,
   onToggleSidebar,
-  onLogin,
   onLogout,
   isAuthenticated = false,
 }) => {
@@ -369,10 +367,11 @@ export const TopBar: React.FC<TopBarProps> = ({
           )}
         </div>
 
-        {!isAuthenticated && onLogin && (
+        {!isAuthenticated && (
           <button
-            onClick={onLogin}
-            className="px-3 py-2 min-h-[40px] rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 flex items-center gap-1.5 transition"
+            onClick={() => {}}
+            className="px-3 py-2 min-h-[40px] rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 flex items-center gap-1.5 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled
             aria-label="Sign in"
           >
             <Terminal className="w-4 h-4" />

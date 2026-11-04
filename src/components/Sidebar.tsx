@@ -45,7 +45,6 @@ interface SidebarProps {
   onOpenAuditModal: () => void;
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
-  onLogin?: () => void;
   onLogout?: () => void;
   isAuthenticated?: boolean;
 }
@@ -61,7 +60,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenAuditModal,
   isMobileOpen = false,
   onCloseMobile,
-  onLogin,
   onLogout,
   isAuthenticated = false,
 }) => {
@@ -804,14 +802,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ) : (
             <div className="p-3 space-y-2">
               <button
-                onClick={onLogin}
-                className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 transition"
+                onClick={() => {}}
+                className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled
               >
                 <Terminal className="w-4 h-4" />
                 <span>Sign In</span>
               </button>
               <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center">
-                Default: admin@audma.enterprise / Admin@2026!
+                Sign in above
               </p>
             </div>
           )}

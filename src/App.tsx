@@ -14,6 +14,7 @@ import { ThemeProvider } from './domains/core/theme-context';
 import { UserSession, GranularPermission } from './types';
 import { Terminal } from 'lucide-react';
 import { Modal } from './components/Modal';
+import { LoginPage } from './components/Login';
 
 function AppContent() {
   const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
@@ -106,15 +107,8 @@ function AppContent() {
     );
   }
 
-  const handleOpenLogin = () => {
-    // In production, show a login modal. For now, prompt via browser.
-    const email = prompt('Enter your email:');
-    if (!email) return;
-    const password = prompt('Enter your password:');
-    if (!password) return;
-    handleLogin(email, password).catch((err: any) => {
-      alert('Login failed: ' + err.error);
-    });
+  const handleLoginSuccess = (user: any) => {
+    setCurrentUser(user);
   };
 
   return (
@@ -131,7 +125,6 @@ function AppContent() {
         onOpenAuditModal={() => setShowAuditModal(true)}
         isMobileOpen={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
-        onLogin={handleOpenLogin}
         onLogout={handleLogout}
         isAuthenticated={!!currentUser}
       />
@@ -149,7 +142,6 @@ function AppContent() {
           onNavigate={handleNavigate}
           onOpenCommandPalette={() => setShowCommandPalette(true)}
           onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-          onLogin={handleOpenLogin}
           onLogout={handleLogout}
           isAuthenticated={!!currentUser}
         />
@@ -157,22 +149,7 @@ function AppContent() {
         {/* View Canvas */}
         <main className="flex-1 p-3 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
           {!currentUser && (
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center shadow-sm">
-              <div className="w-16 h-16 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center mx-auto mb-6">
-                <Terminal className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
-              </div>
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Authentication Required</h2>
-              <p className="text-slate-600 dark:text-slate-400 mb-6">
-                Please sign in to access AUDMA OS. Default admin: <br />
-                <span className="font-mono text-indigo-600 dark:text-indigo-400">admin@audma.enterprise</span> / <span className="font-mono text-indigo-600 dark:text-indigo-400">Admin@2026!</span>
-              </p>
-              <button
-                onClick={handleOpenLogin}
-                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-md transition"
-              >
-                Sign In
-              </button>
-            </div>
+            <LoginPage onLoginSuccess={handleLoginSuccess} />
           )}
 
           {currentUser && activeTab === 'dashboard' && <DashboardView onNavigate={handleNavigate} />}
