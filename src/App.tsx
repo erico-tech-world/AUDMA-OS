@@ -9,12 +9,13 @@ import { AIInvoiceView } from './components/AIInvoiceView';
 import { HRMView } from './components/HRMView';
 import { ProvidersView } from './components/ProvidersView';
 import { SettingsView } from './components/SettingsView';
+import { LoginPage } from './components/LoginPage';
+import { SignUpPage } from './components/SignUpPage';
 import { authApi } from './lib/api/client';
 import { ThemeProvider } from './domains/core/theme-context';
 import { UserSession, GranularPermission } from './types';
 import { Terminal } from 'lucide-react';
 import { Modal } from './components/Modal';
-import { LoginPage } from './components/Login';
 
 function AppContent() {
   const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
@@ -28,6 +29,9 @@ function AppContent() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showAuditModal, setShowAuditModal] = useState(false);
+
+  // Detect current path for dynamic, domain-agnostic routing
+  const [currentPath, setCurrentPath] = useState<string>('');
 
   // Load session on mount
   useEffect(() => {
@@ -45,6 +49,41 @@ function AppContent() {
     loadSession();
   }, []);
 
+  // Track current path for routing decisions (domain-agnostic)
+  useEffect(() => {
+    const updatePath = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    updatePath();
+    window.addEventListener('popstate', updatePath);
+    return () => window.removeEventListener('popstate', updatePath);
+  }, []);
+
+  // Redirect logic: unauthenticated on app routes -> /login ; authenticated on /login or /signup -> /
+  useEffect(() => {
+    if (isLoading || !currentPath) return;
+
+    const isAuthPage = currentPath === '/login' || currentPath === '/signup';
+    const isRoot = currentPath === '/' || currentPath === '';
+
+    if (!currentUser && !isAuthPage && !isRoot) {
+      // User is on an app route but not authenticated -> redirect to login
+      window.location.href = '/login';
+      return;
+    }
+
+    if (currentUser && isAuthPage) {
+      // User is authenticated but on login/signup -> redirect to dashboard
+      window.location.href = '/';
+      return;
+    }
+
+    if (!currentUser && isRoot) {
+      // User is on root but not authenticated -> show login (handled by render)
+      return;
+    }
+  }, [currentUser, isLoading, currentPath]);
+
   const handleLogin = useCallback(async (email: string, password: string) => {
     const apiUser = await authApi.login(email, password);
     const user: UserSession = {
@@ -56,6 +95,9 @@ function AppContent() {
       permissions: apiUser.permissions as GranularPermission[],
     };
     setCurrentUser(user);
+    // Navigate to dashboard after login
+    window.history.pushState({}, '', '/');
+    window.dispatchEvent(new PopStateEvent('popstate'));
     return user;
   }, []);
 
@@ -66,6 +108,9 @@ function AppContent() {
       // ignore logout errors
     }
     setCurrentUser(null);
+    // Navigate to login after logout
+    window.history.pushState({}, '', '/login');
+    window.dispatchEvent(new PopStateEvent('popstate'));
   }, []);
 
   const handleNavigate = (tab: string, subTab?: string) => {
@@ -109,8 +154,53 @@ function AppContent() {
 
   const handleLoginSuccess = (user: any) => {
     setCurrentUser(user);
+    window.history.pushState({}, '', '/');
+    window.dispatchEvent(new PopStateEvent('popstate'));
   };
 
+  const handleSignUpSuccess = (user: any) => {
+    setCurrentUser(user);
+    window.history.pushState({}, '', '/');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+
+  const isAuthenticated = !!currentUser;
+  const isAuthPage = currentPath === '/login' || currentPath === '/signup';
+  const isRoot = currentPath === '/' || currentPath === '';
+
+  // ============================================================================
+  // AUTH PAGES — Rendered standalone (no Sidebar, no TopBar, no platform chrome)
+  // ============================================================================
+  if (isAuthPage) {
+    if (currentPath === '/signup') {
+      return (
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+          <SignUpPage onSignUpSuccess={handleSignUpSuccess} />
+        </div>
+      );
+    }
+    // Default to login page
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <LoginPage onLoginSuccess={handleLoginSuccess} />
+      </div>
+    );
+  }
+
+  // ============================================================================
+  // UNAUTHENTICATED on root — show login page standalone
+  // ============================================================================
+  if (!isAuthenticated && isRoot) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <LoginPage onLoginSuccess={handleLoginSuccess} />
+      </div>
+    );
+  }
+
+  // ============================================================================
+  // AUTHENTICATED APP — Full platform with Sidebar, TopBar, and all components
+  // ============================================================================
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex font-sans selection:bg-indigo-500 selection:text-white antialiased transition-colors duration-200">
       {/* Fixed Left Navigation Sidebar */}
@@ -126,13 +216,11 @@ function AppContent() {
         isMobileOpen={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         onLogout={handleLogout}
-        isAuthenticated={!!currentUser}
+        isAuthenticated={isAuthenticated}
       />
 
       <div
-        className={`flex-1 flex flex-col min-w-0 min-h-screen overflow-x-hidden transition-all duration-300 ${
-          isSidebarCollapsed ? 'md:pl-20' : 'md:pl-64'
-        }`}
+        className={`flex-1 flex flex-col min-w-0 min-h-screen overflow-x-hidden transition-all duration-300 ${isSidebarCollapsed ? 'md:pl-20' : 'md:pl-64'}`}
       >
         {/* Global Top Bar */}
         <TopBar
@@ -143,17 +231,13 @@ function AppContent() {
           onOpenCommandPalette={() => setShowCommandPalette(true)}
           onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
           onLogout={handleLogout}
-          isAuthenticated={!!currentUser}
+          isAuthenticated={isAuthenticated}
         />
 
         {/* View Canvas */}
         <main className="flex-1 p-3 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
-          {!currentUser && (
-            <LoginPage onLoginSuccess={handleLoginSuccess} />
-          )}
-
-          {currentUser && activeTab === 'dashboard' && <DashboardView onNavigate={handleNavigate} />}
-          {currentUser && activeTab === 'receipts' && (
+          {activeTab === 'dashboard' && <DashboardView onNavigate={handleNavigate} />}
+          {activeTab === 'receipts' && (
             <ReceiptTrackerView
               currentUser={currentUser!}
               initialSubView={receiptSubTab}
@@ -161,23 +245,23 @@ function AppContent() {
               onSubTabChange={(st) => handleNavigate('receipts', st)}
             />
           )}
-          {currentUser && activeTab === 'accounting' && (
+          {activeTab === 'accounting' && (
             <AccountingView
               initialSubTab={accountingSubTab}
               subTabOverride={accountingSubTab}
               onSubTabChange={(st) => handleNavigate('accounting', st)}
             />
           )}
-          {currentUser && activeTab === 'ai-invoice' && <AIInvoiceView />}
-          {currentUser && activeTab === 'hrm' && (
+          {activeTab === 'ai-invoice' && <AIInvoiceView />}
+          {activeTab === 'hrm' && (
             <HRMView
               initialSubTab={hrmSubTab}
               subTabOverride={hrmSubTab}
               onSubTabChange={(st) => handleNavigate('hrm', st)}
             />
           )}
-          {currentUser && activeTab === 'providers' && <ProvidersView />}
-          {currentUser && activeTab === 'settings' && (
+          {activeTab === 'providers' && <ProvidersView />}
+          {activeTab === 'settings' && (
             <SettingsView
               currentUser={currentUser!}
               onUserChange={(user: UserSession) => setCurrentUser(user)}
@@ -196,21 +280,19 @@ function AppContent() {
               <span className="font-mono text-[11px] text-slate-500">PostgreSQL + Session Auth</span>
             </div>
             <div className="flex items-center gap-3">
-              {currentUser && (
-                <>
-                  <button
-                    onClick={() => setShowAuditModal(true)}
-                    className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
-                  >
-                    <Terminal className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
-                    <span>Audit Trail</span>
-                  </button>
-                  <span className="text-slate-300 dark:text-slate-700">|</span>
-                  <span className="text-slate-500 text-[11px]">
-                    Active Persona: <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{currentUser.role}</span>
-                  </span>
-                </>
-              )}
+              <>
+                <button
+                  onClick={() => setShowAuditModal(true)}
+                  className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
+                >
+                  <Terminal className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
+                  <span>Audit Trail</span>
+                </button>
+                <span className="text-slate-300 dark:text-slate-700">|</span>
+                <span className="text-slate-500 text-[11px]">
+                  Active Persona: <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{currentUser!.role}</span>
+                </span>
+              </>
             </div>
           </div>
         </footer>
