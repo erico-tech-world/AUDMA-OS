@@ -1450,18 +1450,20 @@ async function startServer() {
   } else {
     console.log('No DATABASE_URL configured. Running in in-memory mode.');
   }
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
+  // Use Vite dev middleware with HMR by default (development mode).
+  // Only serve static dist files when explicitly NODE_ENV=production.
+  if (process.env.NODE_ENV === 'production') {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
+  } else {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
   }
 
   const server = app.listen(PORT, '0.0.0.0', () => {
