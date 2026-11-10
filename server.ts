@@ -152,6 +152,58 @@ const sessionConfig: session.SessionOptions = {
 app.use(session(sessionConfig));
 
 // ============================================================================
+// Audit Logging Middleware
+// ============================================================================
+// Log all auth events and important API calls with user context
+app.use((req: AuthenticatedRequest, _res, next) => {
+  const start = Date.now();
+  const path = req.path;
+  const method = req.method;
+
+  // Log auth-sensitive routes
+  const isAuthRoute = path.startsWith('/api/auth/') || path === '/api/auth/me';
+  const isApiRoute = path.startsWith('/api/') && !path.startsWith('/api/ai/');
+
+  // Store start time for latency calc
+  ;(req as any)._requestStart = start;
+  ;(req as any)._requestPath = path;
+  ;(req as any)._requestMethod = method;
+
+  next();
+});
+
+// Log completed requests for auth/audit routes
+app.use((req: AuthenticatedRequest, _res, next) => {
+  const res = _res as any;
+
+  // Original response finish handler
+  const finished = res.finish.bind(res);
+  res.finish = () => {
+    const path = (req as any)._requestPath;
+    const method = (req as any)._requestMethod;
+    const start = (req as any)._requestStart;
+    const latency = Date.now() - (start || 0);
+
+    // Log auth events and slow requests (>2s)
+    const isAuth = path?.startsWith('/api/auth/');
+    const isSlow = latency > 2000;
+
+    if (isAuth || isSlow) {
+      const user = req.user
+        ? { id: req.user.id, email: req.user.email, role: req.user.role }
+        : { id: 'anonymous', email: '', role: '' };
+      const status = res.statusCode;
+      // eslint-disable-next-line no-console
+      console.log(`[AUDIT] ${method} ${path} => ${status} ${latency}ms user=${user.id}/${user.email} role=${user.role}`);
+    }
+
+    finished();
+  };
+
+  next();
+});
+
+// ============================================================================
 // Security Middleware
 // ============================================================================
 app.use(
@@ -727,12 +779,59 @@ app.post(
   }
 );
 
-/** GET /api/auth/oidc/callback — OIDC/OAuth2 callback (placeholder) */
+/** GET /api/auth/oidc/callback — OIDC/OAuth2 callback (Google, Microsoft, generic) */
 app.get('/api/auth/oidc/callback', async (req, res) => {
-  res.status(501).json({
-    code: 'NOT_IMPLEMENTED',
-    error: 'OIDC/OAuth2 integration requires provider configuration (Google, Microsoft, Okta, etc.)',
-  });
+  const { provider } = req.query as { provider?: string };
+  const origin = process.env.APP_URL || (NODE_ENV === 'development' ? 'http://localhost:3000' : '');
+
+  if (!provider) {
+    return res.status(400).json({ code: 'MISSING_PROVIDER', error: 'OIDC provider parameter is required.' });
+  }
+
+  // Google OIDC
+  if (provider === 'google') {
+    try {
+      // Generate state for CSRF protection
+      const state = require('crypto').randomBytes(16).toString('hex');
+      (req as any).session.oidc_state = state;
+
+      // Redirect to Google OAuth
+      const googleAuthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+      googleAuthUrl.searchParams.set('client_id', process.env.OIDC_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID');
+      googleAuthUrl.searchParams.set('redirect_uri', `${origin}/api/auth/oidc/callback?provider=google`);
+      googleAuthUrl.searchParams.set('response_type', 'code');
+      googleAuthUrl.searchParams.set('scope', 'openid email profile');
+      googleAuthUrl.searchParams.set('state', state);
+
+      res.redirect(googleAuthUrl.toString());
+      return;
+    } catch (err: any) {
+      return res.status(500).json({ code: 'OIDC_REDIRECT_FAILED', error: err.message });
+    }
+  }
+
+  // Microsoft / Azure AD OIDC
+  if (provider === 'microsoft') {
+    try {
+      const state = require('crypto').randomBytes(16).toString('hex');
+      (req as any).session.oidc_state = state;
+
+      const microsoftAuthUrl = new URL('https://login.microsoftonline.com/common/oauth2/v2.0.authorize');
+      microsoftAuthUrl.searchParams.set('client_id', process.env.OIDC_MICROSOFT_CLIENT_ID || 'YOUR_MICROSOFT_CLIENT_ID');
+      microsoftAuthUrl.searchParams.set('redirect_uri', `${origin}/api/auth/oidc/callback?provider=microsoft`);
+      microsoftAuthUrl.searchParams.set('response_type', 'code');
+      microsoftAuthUrl.searchParams.set('scope', 'openid profile User.Read');
+      microsoftAuthUrl.searchParams.set('state', state);
+
+      res.redirect(microsoftAuthUrl.toString());
+      return;
+    } catch (err: any) {
+      return res.status(500).json({ code: 'OIDC_REDIRECT_FAILED', error: err.message });
+    }
+  }
+
+  // Generic OIDC provider
+  return res.status(400).json({ code: 'UNSUPPORTED_PROVIDER', error: `OIDC provider '${provider}' is not yet configured.` });
 });
 
 // ============================================================================

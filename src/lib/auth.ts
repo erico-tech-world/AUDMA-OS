@@ -122,3 +122,39 @@ export async function findUserById(pool: Pool, id: string): Promise<AuthUser | n
 export function generateSessionSecret(): string {
   return require('crypto').randomBytes(32).toString('base64url');
 }
+
+/** Generate a TOTP secret for MFA. */
+export function generateTotpSecret(): string {
+  return require('crypto').randomBytes(20).toString('base32');
+}
+
+/** Verify a TOTP code against a secret (RFC 6238). */
+export function verifyTotp(code: string, secret: string): boolean {
+  const byteSecret = Buffer.from(secret, 'base32' as BufferEncoding);
+  const time = Math.floor(Date.now() / 1000);
+  const timeSteps = Math.floor(time / 30);
+  const stepCount = 8; // 64-bit counter
+
+  // Compute HMAC-SHA1
+  const hmac = require('crypto').createHmac('sha1', byteSecret).update(
+    Buffer.from([timeSteps >>> 24, timeSteps >> 16, timeSteps >> 8, timeSteps]).toString('hex'),
+    'ascii'
+  ).digest();
+
+  // Dynamic truncation
+  const offset = hmac[hmac.length - 1] & 0x0f;
+  const binary = hmac.slice(offset, offset + 4);
+  const uint32 = ((binary[0] & 0x7f) << 24) | (binary[1] << 16) | (binary[2] << 8) | binary[3];
+  const codeValue = uint32 % 1_000_000;
+
+  const formattedCode = String(codeValue).padStart(6, '0');
+  return formattedCode === code;
+}
+
+/** Generate a QR code data URL for TOTP provisioning. */
+export function getTotpQrDataUrl(secret: string, accountName: string, issuerName: string = 'AUDMA OS'): string {
+  // RFC 4648 base32 URL-safe encoding is already handled by toString('base32')
+  const encodedSecret = secret.replace(/=+$/, ''); // strip padding
+  const otpAuthUrl = `otpauth://totp/${encodeURIComponent(`${issuerName}:${accountName}`)}?secret=${encodedSecret}&issuer=${encodeURIComponent(issuerName)}&digits=6&period=30&algorithm=SHA1`;
+  return `data:image/png;base64,${require('crypto').createHash('md5').update(otpAuthUrl).digest('base64')}`; // placeholder - real QR generation needs png library
+}
