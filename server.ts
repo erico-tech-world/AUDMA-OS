@@ -703,79 +703,33 @@ app.post(
   }
 );
 
-/** POST /api/auth/password-reset/request — request a password reset token */
+/** POST /api/auth/password-reset/request — IdP-managed password recovery */
 app.post(
   '/api/auth/password-reset/request',
   authRateLimiter.middleware({
     identifierExtractor: getClientIp,
   }),
   validateBody(PasswordResetRequestSchema),
-  async (req: AuthenticatedRequest, res) => {
-    try {
-      const { email } = req.validatedBody as { email: string };
-
-      if (!pgPool) {
-        return res.status(503).json({
-          code: 'DATABASE_UNAVAILABLE',
-          error: 'Database not configured.',
-        });
-      }
-
-      const user = await pgPool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [
-        email,
-      ]);
-
-      // Always return OK to prevent user enumeration
-      if (user.rows.length > 0) {
-        logger.info({ email, userId: user.rows[0].id }, 'Password reset requested');
-      }
-
-      res.json({
-        code: 'OK',
-        message: 'If an account exists with this email, a reset link has been sent.',
-      });
-    } catch (error: any) {
-      logger.error({ err: error }, 'Password reset request error');
-      res.status(500).json({
-        code: 'PASSWORD_RESET_FAILED',
-        error: error.message || 'Password reset request failed',
-      });
-    }
+  async (_req: AuthenticatedRequest, res) => {
+    return res.status(403).json({
+      code: 'IDP_MANAGED',
+      error: 'Authentication and password management are handled by your corporate Identity Provider. Please contact your system administrator or use your IdP account recovery portal to reset your credentials.',
+    });
   }
 );
 
-/** POST /api/auth/password-reset/confirm — confirm password reset with token */
+/** POST /api/auth/password-reset/confirm — IdP-managed password recovery */
 app.post(
   '/api/auth/password-reset/confirm',
   authRateLimiter.middleware({
     identifierExtractor: getClientIp,
   }),
   validateBody(PasswordResetConfirmSchema),
-  async (req: AuthenticatedRequest, res) => {
-    try {
-      const { token, new_password } = req.validatedBody as {
-        token: string;
-        new_password: string;
-      };
-
-      if (!pgPool) {
-        return res.status(503).json({
-          code: 'DATABASE_UNAVAILABLE',
-          error: 'Database not configured.',
-        });
-      }
-
-      res.status(501).json({
-        code: 'NOT_IMPLEMENTED',
-        error: 'Email-based password reset requires SMTP configuration. Contact support.',
-      });
-    } catch (error: any) {
-      logger.error({ err: error }, 'Password reset confirm error');
-      res.status(500).json({
-        code: 'PASSWORD_RESET_FAILED',
-        error: error.message || 'Password reset failed',
-      });
-    }
+  async (_req: AuthenticatedRequest, res) => {
+    return res.status(403).json({
+      code: 'IDP_MANAGED',
+      error: 'Authentication and password management are handled by your corporate Identity Provider. Please contact your system administrator or use your IdP account recovery portal to reset your credentials.',
+    });
   }
 );
 
